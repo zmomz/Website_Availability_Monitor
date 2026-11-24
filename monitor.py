@@ -88,19 +88,23 @@ def update_state(state, healthy, detail):
     return None  # first failure, or already DOWN (duplicate suppressed)
 
 
-def build_payload(event, state, detail, test=False):
+def build_payload(event, state, detail, test=False, failures=None):
+    """failures: failed-check count to report (defaults to the current counter).
+    For RECOVERY the counter is already reset, so the caller passes the outage length."""
+    failures = state.consecutive_failures if failures is None else failures
     if event == "DOWN":
-        message = (f"{state.name} is DOWN after {state.consecutive_failures} "
+        message = (f"{state.name} is DOWN after {failures} "
                    f"consecutive failed checks. Last error: {detail}")
     else:
-        message = f"{state.name} has RECOVERED and is reachable again ({detail})."
+        message = (f"{state.name} has RECOVERED and is reachable again ({detail}) "
+                   f"after {failures} consecutive failed checks.")
     payload = {
         "event": event,
         "website": state.name,
         "url": state.url,
         "timestamp": utc_now(),
         "message": message,
-        "consecutive_failures": state.consecutive_failures,
+        "consecutive_failures": failures,
         "detail": detail,
     }
     if test:
@@ -132,10 +136,13 @@ def process_check(state, healthy, detail, webhook_url, test=False):
     else:
         log.warning("CHECK FAIL  %-10s %s (%s) [consecutive failures: %d]",
                     state.name, state.url, detail, state.consecutive_failures + 1)
+    failures_before = state.consecutive_failures
     event = update_state(state, healthy, detail)
     if event:
         log.warning("EVENT %s: %s", event, state.name)
-        delivered = send_notification(webhook_url, build_payload(event, state, detail, test=test))
+        failures = failures_before if event == "RECOVERY" else None
+        delivered = send_notification(webhook_url,
+                                      build_payload(event, state, detail, test=test, failures=failures))
         return event, delivered
     if not healthy and state.is_down:
         log.info("%s still DOWN; duplicate notification suppressed", state.name)
@@ -157,17 +164,20 @@ def monitor(webhook_url, interval=CHECK_INTERVAL, rounds=None):
     log.info("Monitor started: %d websites, interval %ss, webhook %s",
              len(states), interval, "configured" if webhook_url else "NOT configured")
     done = 0
-    while rounds is None or done < rounds:
-        started = time.monotonic()
-        try:
-            run_round(states, webhook_url, session)
-        except Exception:
-            log.exception("Unexpected error in monitoring round")
-        done += 1
-        if rounds is not None and done >= rounds:
-            break
-        time.sleep(max(0, interval - (time.monotonic() - started)))
-    log.info("Monitor stopped after %d round(s)", done)
+    try:
+        while rounds is None or done < rounds:
+            started = time.monotonic()
+            try:
+                run_round(states, webhook_url, session)
+            except Exception:
+                log.exception("Unexpected error in monitoring round")
+            done += 1
+            if rounds is not None and done >= rounds:
+                break
+            time.sleep(max(0, interval - (time.monotonic() - started)))
+    finally:  # also runs on Ctrl+C
+        session.close()
+        log.info("Monitor stopped after %d round(s)", done)
 
 
 def run_test_mode(webhook_url, site="Cloudflare"):
@@ -212,6 +222,8 @@ def main(argv=None):
     p.add_argument("--test", action="store_true", help="Run test mode (simulated outage, real webhooks)")
     p.add_argument("--test-site", default="Cloudflare", choices=WEBSITES, help="Site used in test mode")
     args = p.parse_args(argv)
+    if args.interval < 1:
+        p.error("--interval must be at least 1 second")
 
     setup_logging()
     if not args.webhook_url:

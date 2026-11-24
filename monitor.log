@@ -1,0 +1,22 @@
+2026-11-24 18:17:51+0300 INFO    === TEST MODE: simulating outage for Cloudflare (webhook configured) ===
+2026-11-24 18:17:51+0300 INFO    CHECK OK    Cloudflare https://www.cloudflare.com/ (HTTP 200 (simulated))
+2026-11-24 18:17:51+0300 INFO    TEST step 1: healthy=True -> event=None (expected None) PASS
+2026-11-24 18:17:51+0300 WARNING CHECK FAIL  Cloudflare https://www.cloudflare.com/ (timeout after 10s (simulated)) [consecutive failures: 1]
+2026-11-24 18:17:51+0300 INFO    TEST step 2: healthy=False -> event=None (expected None) PASS
+2026-11-24 18:17:51+0300 WARNING CHECK FAIL  Cloudflare https://www.cloudflare.com/ (HTTP error 503 (simulated)) [consecutive failures: 2]
+2026-11-24 18:17:51+0300 WARNING EVENT DOWN: Cloudflare
+2026-11-24 18:17:52+0300 INFO    Webhook delivered: DOWN Cloudflare (HTTP 200)
+2026-11-24 18:17:52+0300 INFO    TEST step 3: healthy=False -> event=DOWN (expected DOWN) PASS
+2026-11-24 18:17:52+0300 WARNING CHECK FAIL  Cloudflare https://www.cloudflare.com/ (connection error (simulated)) [consecutive failures: 3]
+2026-11-24 18:17:52+0300 INFO    Cloudflare still DOWN; duplicate notification suppressed
+2026-11-24 18:17:52+0300 INFO    TEST step 4: healthy=False -> event=None (expected None) PASS
+2026-11-24 18:17:52+0300 WARNING CHECK FAIL  Cloudflare https://www.cloudflare.com/ (HTTP error 503 (simulated)) [consecutive failures: 4]
+2026-11-24 18:17:52+0300 INFO    Cloudflare still DOWN; duplicate notification suppressed
+2026-11-24 18:17:52+0300 INFO    TEST step 5: healthy=False -> event=None (expected None) PASS
+2026-11-24 18:17:52+0300 INFO    CHECK OK    Cloudflare https://www.cloudflare.com/ (HTTP 200 (simulated))
+2026-11-24 18:17:52+0300 WARNING EVENT RECOVERY: Cloudflare
+2026-11-24 18:17:54+0300 INFO    Webhook delivered: RECOVERY Cloudflare (HTTP 200)
+2026-11-24 18:17:54+0300 INFO    TEST step 6: healthy=True -> event=RECOVERY (expected RECOVERY) PASS
+2026-11-24 18:17:54+0300 INFO    CHECK OK    Cloudflare https://www.cloudflare.com/ (HTTP 200 (simulated))
+2026-11-24 18:17:54+0300 INFO    TEST step 7: healthy=True -> event=None (expected None) PASS
+2026-11-24 18:17:54+0300 INFO    === TEST MODE PASSED: notifications triggered = ['DOWN', 'RECOVERY'] ===

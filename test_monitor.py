@@ -2,6 +2,8 @@
 
 Run:  python -m unittest -v test_monitor.py
 """
+import contextlib
+import io
 import json
 import logging
 import os
@@ -30,9 +32,12 @@ class Receiver:
 
             def do_GET(self):
                 time.sleep(outer.site_delay)
-                self.send_response(outer.site_status)
-                self.end_headers()
-                self.wfile.write(b"ok")
+                try:
+                    self.send_response(outer.site_status)
+                    self.end_headers()
+                    self.wfile.write(b"ok")
+                except (ConnectionAbortedError, BrokenPipeError, ConnectionResetError):
+                    pass  # client already gave up (timeout test)
 
             def do_POST(self):
                 body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
@@ -47,6 +52,7 @@ class Receiver:
 
     def close(self):
         self.server.shutdown()
+        self.server.server_close()  # release the listening socket (avoids ResourceWarning)
 
 
 class MonitorTests(unittest.TestCase):
@@ -83,7 +89,9 @@ class MonitorTests(unittest.TestCase):
         self.assertIn("timeout", detail)
 
     def test_connection_error(self):
-        ok, detail = monitor.check_website("http://127.0.0.1:1/", timeout=2)
+        # Windows retries a refused connect for ~2 s, so the timeout must exceed that,
+        # otherwise requests raises ConnectTimeout and the result reads "timeout".
+        ok, detail = monitor.check_website("http://127.0.0.1:1/", timeout=5)
         self.assertFalse(ok)
         self.assertIn("connection error", detail)
 
@@ -109,6 +117,13 @@ class MonitorTests(unittest.TestCase):
         events = [self.check(s) for _ in range(3)]
         self.assertEqual(events, ["RECOVERY", None, None])
         self.assertEqual([r["json"]["event"] for r in self.rx.requests], ["DOWN", "RECOVERY"])
+        # RECOVERY reports how many checks failed during the outage, not the reset counter (0)
+        self.assertEqual(self.rx.requests[1]["json"]["consecutive_failures"], 6)
+
+    def test_interval_must_be_positive(self):
+        for bad in ("0", "-5"):
+            with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+                monitor.main(["--once", "--interval", bad])
 
     def test_payload_is_json_with_required_fields(self):
         s = self.site()

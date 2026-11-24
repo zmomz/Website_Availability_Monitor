@@ -17,7 +17,9 @@ A small Python tool that checks Cloudflare, GitHub and Wikipedia every 5 minutes
 | `capture_webhook.py` | Playwright script that screenshots the webhook.site dashboard     |
 | `requirements.txt`   | Python dependencies                                               |
 | `monitor.log`        | Sample execution log (created/appended on every run)             |
-| `webhook-test.png`   | Screenshot of a real alert received by webhook.site               |
+| `webhook-test.png`   | webhook.site showing the test RECOVERY alert (2 requests in inbox) |
+| `webhook-test-first.png` | webhook.site showing the test DOWN alert                      |
+| `screenshots/`       | Screenshots: tests, live check, test mode, received alerts        |
 
 ## 1. Install
 
@@ -37,7 +39,7 @@ python -m playwright install chromium   # only needed for the screenshot script
    `https://webhook.site/0a1b2c3d-1234-5678-9abc-def012345678`. Copy it.
 3. Leave the tab open: requests sent to that URL appear there live.
 
-Alternatively, from a terminal: `curl -X POST https://webhook.site/token` returns JSON whose `uuid` field is your token, so the URL is `https://webhook.site/<uuid>`.
+Alternatively, from a terminal: `curl -X POST -H "Accept: application/json" https://webhook.site/token` returns JSON whose `uuid` field is your token, so the URL is `https://webhook.site/<uuid>`.
 
 ## 3. Configure the webhook URL
 
@@ -57,7 +59,7 @@ $env:MONITOR_WEBHOOK_URL = "https://webhook.site/<your-uuid>"
 ```bash
 python monitor.py                 # runs forever, checks every 300 s (Ctrl+C to stop)
 python monitor.py --once          # one round of checks, then exit
-python monitor.py --interval 60   # custom interval in seconds
+python monitor.py --interval 60   # custom interval in seconds (minimum 1)
 ```
 
 Output goes to the console and is appended to `monitor.log` next to the script.
@@ -86,8 +88,10 @@ It exits with code 0 only if every step matched **and** both webhooks were deliv
 Capture the dashboard screenshot:
 
 ```bash
-python capture_webhook.py "$MONITOR_WEBHOOK_URL"     # writes webhook-test.png
+python capture_webhook.py "$MONITOR_WEBHOOK_URL"     # writes webhook-test.png + webhook-test-first.png
 ```
+
+`webhook-test.png` shows the newest request (RECOVERY) and `webhook-test-first.png` the oldest (DOWN). The sender's IP address and location shown by webhook.site are blurred.
 
 ### Automated tests
 
@@ -122,7 +126,7 @@ Example DOWN payload (POSTed as `Content-Type: application/json`):
 }
 ```
 
-A RECOVERY payload has the same fields, with `"event": "RECOVERY"` and a message saying the site is reachable again. Timestamps are UTC ISO-8601.
+A RECOVERY payload has the same fields, with `"event": "RECOVERY"` and a message saying the site is reachable again. In a RECOVERY payload, `consecutive_failures` is the number of failed checks during the outage that just ended. Timestamps are UTC ISO-8601.
 
 ## Log format
 
